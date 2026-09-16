@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32 Marine Telemetry Station</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- MQTT.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, sans-serif; }
+    body { background-color: #0b111e; color: #e2e8f0; padding: 20px; }
+    
+    .header {
+      background: #151d30;
+      padding: 16px 24px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border: 1px solid #1e293b;
+    }
+    .header h1 { font-size: 1.25rem; letter-spacing: 1px; color: #f8fafc; }
+    .status-badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .grid-top {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #151d30;
+      padding: 18px;
+      border-radius: 12px;
+      border: 1px solid #1e293b;
+    }
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .card-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .card-value span { font-size: 1rem; color: #38bdf8; margin-left: 4px; }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 2.2fr 1fr;
+      gap: 16px;
+      height: 580px;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      border: 1px solid #1e293b;
+    }
+    .log-panel {
+      background: #151d30;
+      border-radius: 12px;
+      border: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+    }
+    .log-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+    .log-content {
+      flex: 1;
+      background: #090e17;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      overflow-y: auto;
+      line-height: 1.6;
+      border: 1px solid #1e293b;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>ESP32 MARINE GATEWAY // MONITOR</h1>
+    <div class="status-badge" id="conn-status">● LIVE STREAM ACTIVE</div>
+  </div>
+
+  <div class="grid-top">
+    <div class="card">
+      <div class="card-title"><span>LATITUDE</span><span>GPS</span></div>
+      <div class="card-value" id="val-lat">36.9800 <span>° N</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>LONGITUDE</span><span>GPS</span></div>
+      <div class="card-value" id="val-lon">27.3500 <span>° E</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>SPEED (SOG)</span><span>NMEA</span></div>
+      <div class="card-value" id="val-speed">-- <span>KTS</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>WIND SPEED</span><span>SENSOR</span></div>
+      <div class="card-value" id="val-wind">-- <span>KTS</span></div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div id="map"></div>
+    <div class="log-panel">
+      <div class="log-title">REAL-TIME INGESTION LOG</div>
+      <div class="log-content" id="log-box">
+        [INIT] Awaiting incoming stream...<br>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. Haritayı başlat (Bodrum - İstanköy arası açık sular)
+    const map = L.map('map').setView([36.9800, 27.3500], 12);
+
+    // 2. Esri Dark Gray Katmanı
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+      maxZoom: 16
+    }).addTo(map);
+
+    // 3. Tekne İkonu (Mavi Daire)
+    const vesselMarker = L.circleMarker([36.9800, 27.3500], {
+      radius: 7,
+      fillColor: '#38bdf8',
+      color: '#ffffff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.9
+    }).addTo(map);
+
+    // 4. ROTA İZİ (Polyline) Tanımı
+    const pathCoordinates = [];
+    const routeLine = L.polyline([], {
+      color: '#38bdf8',
+      weight: 3,
+      opacity: 0.8,
+      dashArray: '4, 8' // Kesikli şık denizcilik rotası stili
+    }).addTo(map);
+
+    // 5. MQTT Bağlantısı
+    const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+    const topic = 'cagla/marine/vessel1/telemetry';
+
+    const logBox = document.getElementById('log-box');
+
+    client.on('connect', () => {
+      client.subscribe(topic);
+      logBox.innerHTML += `[MQTT] Subscribed to ${topic}<br>`;
+    });
+
+    client.on('message', (t, message) => {
+      try {
+        const data = JSON.parse(message.toString());
+
+        // Arayüz Göstergelerini Güncelle
+        document.getElementById('val-lat').innerHTML = `${data.lat.toFixed(4)} <span>° N</span>`;
+        document.getElementById('val-lon').innerHTML = `${data.lon.toFixed(4)} <span>° E</span>`;
+        document.getElementById('val-speed').innerHTML = `${data.speed.toFixed(1)} <span>KTS</span>`;
+        document.getElementById('val-wind').innerHTML = `${data.wind.toFixed(1)} <span>KTS</span>`;
+
+        // Konumu Güncelle ve Rota Çizgisine Ekle
+        const newLatLng = [data.lat, data.lon];
+        vesselMarker.setLatLng(newLatLng);
+        routeLine.addLatLng(newLatLng);
+        map.panTo(newLatLng); // Haritayı otomatik tekneye odaklar
+
+        // Log Penceresine Yaz
+        logBox.innerHTML = `[RECV] SOG: ${data.speed.toFixed(1)} kts | LAT: ${data.lat.toFixed(4)}<br>` + logBox.innerHTML;
+      } catch (err) {
+        console.error('Data parse error:', err);
+      }
+    });
+  </script>
+</body>
+</html>
