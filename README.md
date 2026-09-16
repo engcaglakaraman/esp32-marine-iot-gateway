@@ -6,9 +6,13 @@
 Bu proje, açık deniz seyrüsefer ortamları için tasarlanmış, uçtan uca çalışan düşük gecikmeli bir **IoT Deniz Telemetri Hattı** prototipidir. Masadaki bir ESP32 mikrodenetleyicisinden çıkan telemetri verileri; bulut katmanı üzerinden saniyeler içinde karanlık temalı, profesyonel bir VTS (Gemi Trafik Hizmetleri) istasyon paneline aktarılır ve dinamik rota izleme algoritmasıyla görselleştirilir.
 
 
-## Ekran Görüntüsü
+## Ekran Görüntüleri
 
+### Canlı Telemetri İzleme Paneli (Web UI)
+![Canlı İzleme Paneli](dashboard.png)
 
+### ESP32 Seri Port Çıktısı (MQTT JSON Akışı)
+![ESP32 Telemetri Yayını](serial_monitor.png)
 
 ##  Simülasyon Dinamikleri (Açık Deniz Senaryosu)
 
