@@ -86,8 +86,4 @@ const char* password = "WIFI_SIFRENIZ";
 * Bu depoda yer alan kaynak kodlar hiçbir sabit kişisel ağ şifresi içermez.
 * Aktarılan telemetri koordinatları tamamen eğitim, test ve portföy demonstrasyonu amacıyla matematiksel olarak kurgulanmıştır; gerçek bir fiziksel varlığın konumunu yansıtmaz.
 
-```
 
-Bu döküman projeyi sıradan bir "haritada nokta oynatma" işinden çıkarıp, veri akışı ve simülasyon mantığı düşünülmüş ciddi bir **Gömülü Sistem & IoT Mühendisliği** çalışması olarak sergileyecektir.
-
-```
